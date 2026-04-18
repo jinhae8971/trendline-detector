@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Detection outputs (generated JSONs should NOT be committed)
+output/*.json
+output/cache/
+!output/.gitkeep
+!tests/fixtures/*.json
+
+# Secrets
+.env
+*.key
+
+# Logs
+*.log
+logs/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Test
+.pytest_cache/
+.coverage
+htmlcov/
