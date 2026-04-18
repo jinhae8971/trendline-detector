@@ -1,0 +1,91 @@
+name: CI
+
+# trendline-detector의 테스트 및 스모크 데이터 검출 자동화
+# - PR/push 시 pytest 실행
+# - 매주 월요일 KST 08:00 (UTC 23:00 일) 실제 시장 데이터로 스모크 검출 실행
+#   (기능이 계속 작동하는지 확인)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # 매주 월요일 KST 08:00 = UTC 일요일 23:00
+    - cron: '0 23 * * 0'
+  workflow_dispatch:
+    inputs:
+      ticker:
+        description: '스모크 테스트 티커'
+        required: false
+        default: 'NVDA'
+      days:
+        description: '검출 lookback 일수'
+        required: false
+        default: '180'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: "Pytest coverage"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Run pytest
+        run: pytest tests/ -v
+
+  smoke-detect:
+    name: "Smoke test on real market data"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # PR에서는 스모크 테스트 생략 (네트워크 호출)
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: "Resolve inputs"
+        id: cfg
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "ticker=${{ inputs.ticker }}" >> "$GITHUB_OUTPUT"
+            echo "days=${{ inputs.days }}"     >> "$GITHUB_OUTPUT"
+          else
+            echo "ticker=NVDA" >> "$GITHUB_OUTPUT"
+            echo "days=180"    >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run detection on ${{ steps.cfg.outputs.ticker }}
+        run: |
+          python -m src.detect \
+            --ticker "${{ steps.cfg.outputs.ticker }}" \
+            --days "${{ steps.cfg.outputs.days }}" \
+            --output "output/smoke_${{ steps.cfg.outputs.ticker }}.json"
+
+      - name: Upload detection result
+        uses: actions/upload-artifact@v4
+        with:
+          name: detection-${{ steps.cfg.outputs.ticker }}-${{ github.run_number }}
+          path: output/*.json
+          retention-days: 14
